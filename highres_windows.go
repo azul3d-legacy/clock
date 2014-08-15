@@ -4,16 +4,31 @@
 
 package clock
 
-/*
-	#cgo LDFLAGS: -lkernel32
-	#include <windows.h>
-*/
-import "C"
-
 import (
+	"syscall"
 	"time"
 	"unsafe"
 )
+
+var (
+	kernel32                      = syscall.MustLoadDLL("kernel32.dll")
+	procQueryPerformanceCounter   = kernel32.MustFindProc("QueryPerformanceCounter")
+	procQueryPerformanceFrequency = kernel32.MustFindProc("QueryPerformanceFrequency")
+)
+
+func queryPerformanceCounter(performanceCount unsafe.Pointer) uintptr {
+	ret, _, _ := procQueryPerformanceCounter.Call(
+		uintptr(performanceCount),
+	)
+	return ret
+}
+
+func queryPerformanceFrequency(performanceFrequency unsafe.Pointer) uintptr {
+	ret, _, _ := procQueryPerformanceFrequency.Call(
+		uintptr(performanceFrequency),
+	)
+	return ret
+}
 
 const (
 	// Note: Due to some BIOS issues in multi-core CPU's, the value returned from
@@ -56,13 +71,13 @@ func highResTimeFallback() time.Duration {
 }
 
 func init() {
-	if C.QueryPerformanceCounter((*C.LARGE_INTEGER)(unsafe.Pointer(&start))) == 0 {
+	if queryPerformanceCounter(unsafe.Pointer(&start)) == 0 {
 		doFallback = true
 		return
 	}
 
 	var freq uint64
-	if C.QueryPerformanceFrequency((*C.LARGE_INTEGER)(unsafe.Pointer(&freq))) == 0 {
+	if queryPerformanceFrequency(unsafe.Pointer(&freq)) == 0 {
 		doFallback = true
 		return
 	}
@@ -85,7 +100,7 @@ func Time() time.Duration {
 
 attempt:
 	var now uint64
-	if C.QueryPerformanceCounter((*C.LARGE_INTEGER)(unsafe.Pointer(&now))) == 0 {
+	if queryPerformanceCounter(unsafe.Pointer(&now)) == 0 {
 		doFallback = true
 		return highResTimeFallback()
 	}
